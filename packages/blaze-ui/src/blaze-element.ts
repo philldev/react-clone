@@ -1,3 +1,5 @@
+import type { Hook } from "./blaze-hooks";
+
 export interface BlazeComponent<T extends any> {
   (props: T): BlazeNode;
 }
@@ -12,6 +14,9 @@ export interface BlazeElement<
   type: T;
   props: U;
   __componentChildrenSnapshot?: BlazeNode;
+  __componentContainer?: HTMLElement;
+  __hooks?: Hook[];
+  __domIndex?: number;
 }
 
 export type BlazeFragment = BlazeNode[];

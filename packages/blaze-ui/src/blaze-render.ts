@@ -11,7 +11,7 @@ import {
   type BlazeNode,
   type BlazeTextNode,
 } from "./blaze-element";
-import { arraysAreEqual } from "./utils";
+import { arraysAreEqual, compareProps } from "./utils";
 
 let _currentContainer: HTMLElement | null = null;
 let _currentNode: BlazeNode | null = null;
@@ -21,7 +21,7 @@ export function render(node: BlazeNode, container: HTMLElement) {
   if (!_mounted) {
     _currentContainer = container;
     _currentNode = node;
-    const dom = createBlazeNodeDom(node);
+    const dom = createBlazeNodeDom(node, container);
     if (dom === null) {
       return;
     }
@@ -33,15 +33,19 @@ export function render(node: BlazeNode, container: HTMLElement) {
   }
 }
 
-function createBlazeNodeDom(node: BlazeNode): Node | null {
+function createBlazeNodeDom(
+  node: BlazeNode,
+  container: HTMLElement,
+  index: number = 0,
+): Node | null {
   if (isBlazeTextNode(node)) {
     return createBlazeTextNodeDom(node);
   } else if (isBlazeElement(node)) {
     return createBlazeElementDom(node);
   } else if (isBlazeComponent(node)) {
-    return createBlazeComponentDom(node);
+    return createBlazeComponentDom(node, container, index);
   } else if (isBlazeFragment(node)) {
-    return createBlazeFragmentDom(node);
+    return createBlazeFragmentDom(node, container, index);
   } else if (isBlazeNullNode(node)) {
     return null;
   } else {
@@ -53,25 +57,85 @@ function createBlazeTextNodeDom(textNode: BlazeTextNode) {
   return document.createTextNode(textNode.toString());
 }
 
-function createBlazeFragmentDom(fragment: BlazeFragment) {
+function createBlazeFragmentDom(
+  fragment: BlazeFragment,
+  container: HTMLElement,
+  index: number = 0,
+) {
   const domFragment = document.createDocumentFragment();
-  for (const child of fragment) {
-    const dom = createBlazeNodeDom(child);
+  for (let i = 0; i < fragment.length; i++) {
+    const child = fragment[i];
+    const dom = createBlazeNodeDom(child, container, i + index);
     if (dom === null) {
       continue;
     }
     domFragment.append(dom);
   }
+
   return domFragment;
 }
 
-function createBlazeComponentDom(node: BlazeElement<BlazeComponent<any>, any>) {
+function createBlazeComponentDom(
+  node: BlazeElement<BlazeComponent<any>, any>,
+  container: HTMLElement,
+  index: number,
+) {
+  node.__domIndex = index;
+  const snapshots = renderComponent(node, container);
+  return createBlazeNodeDom(snapshots, container);
+}
+
+let currentComponentNode: BlazeElement<BlazeComponent<any>, any> | null = null;
+let currentHookIndex = 0;
+
+export function getCurrentComponentNode() {
+  return currentComponentNode;
+}
+
+export function getCurrentHookIndex() {
+  return currentHookIndex;
+}
+
+export function incrementCurrentHookIndex() {
+  currentHookIndex++;
+}
+
+function renderComponent(
+  node: BlazeElement<BlazeComponent<any>, any>,
+  container: HTMLElement,
+) {
+  currentHookIndex = 0;
+  currentComponentNode = node;
+
+  if (node.__hooks === undefined) {
+    node.__hooks = [];
+  }
+
   const Component = node.type;
   const props = node.props;
   const snapshots = Component(props);
-  node.__componentChildrenSnapshot = snapshots;
 
-  return createBlazeNodeDom(snapshots);
+  node.__componentChildrenSnapshot = snapshots;
+  node.__componentContainer = container;
+
+  return snapshots;
+}
+
+export function tryRerenderComponent(
+  node: BlazeElement<BlazeComponent<any>, any>,
+) {
+  const hooks = node.__hooks!;
+  const container = node.__componentContainer!;
+
+  for (let i = 0; i < hooks.length; i++) {
+    const hook = hooks[i];
+    if (hook.value !== hook.prevValue) {
+      const oldSnapshots = node.__componentChildrenSnapshot;
+      const snapshots = renderComponent(node, container);
+      update(oldSnapshots, snapshots, container, node.__domIndex!);
+      return;
+    }
+  }
 }
 
 function createBlazeElementDom(element: BlazeElement<any, any>) {
@@ -82,18 +146,19 @@ function createBlazeElementDom(element: BlazeElement<any, any>) {
   for (const [key, value] of Object.entries(element.props as any)) {
     if (key === "children") {
       if (Array.isArray(value)) {
-        for (const child of value as BlazeNode[]) {
+        for (let i = 0; i < value.length; i++) {
+          const child = value[i];
           if (!isBlazeNode(child)) {
             throw new Error(`Invalid child node: ${child}`);
           }
-          const dom = createBlazeNodeDom(child);
+          const dom = createBlazeNodeDom(child, domElement, i);
           if (dom === null) {
             continue;
           }
           domElement.append(dom);
         }
       } else {
-        const dom = createBlazeNodeDom(value as BlazeNode);
+        const dom = createBlazeNodeDom(value as BlazeNode, domElement);
         if (dom === null) {
           continue;
         }
@@ -126,15 +191,11 @@ function createBlazeElementDom(element: BlazeElement<any, any>) {
 }
 
 function appendBlazeNodeDom(node: BlazeNode, parent: HTMLElement) {
-  console.log("append", node);
-
-  const dom = createBlazeNodeDom(node);
+  const dom = createBlazeNodeDom(node, parent);
   if (dom !== null) parent.append(dom);
 }
 
 function removeBlazeNodeDom(nodeIndex: number, parent: HTMLElement) {
-  console.log("remove", parent.childNodes[nodeIndex]);
-
   parent.removeChild(parent.childNodes[nodeIndex]);
 }
 
@@ -143,8 +204,7 @@ function replaceBlazeNodeDom(
   newNode: BlazeNode,
   parent: HTMLElement,
 ) {
-  console.log("replace", parent.childNodes[nodeIndex], newNode);
-  const newDom = createBlazeNodeDom(newNode);
+  const newDom = createBlazeNodeDom(newNode, parent);
   if (newDom !== null) {
     parent.replaceChild(newDom, parent.childNodes[nodeIndex]);
   }
@@ -176,19 +236,23 @@ function update(
 
   if (isBlazeComponent(newNode) && isBlazeComponent(oldNode)) {
     const newProps = newNode.props;
-    const NewComponent = newNode.type;
+    const oldProps = oldNode.props;
 
-    const newSnapshots = NewComponent(newProps);
-    const oldSnapshots = oldNode.__componentChildrenSnapshot;
+    let propsChanged = compareProps(oldProps, newProps);
 
-    update(
-      oldSnapshots,
-      newSnapshots,
-      parent,
-      index,
-      depth,
-      lastFragmentLength,
-    );
+    if (propsChanged) {
+      const newSnapshots = renderComponent(newNode, parent);
+      const oldSnapshots = oldNode.__componentChildrenSnapshot;
+
+      update(
+        oldSnapshots,
+        newSnapshots,
+        parent,
+        index,
+        depth,
+        lastFragmentLength,
+      );
+    }
   }
 
   if (isBlazeTextNode(newNode) && isBlazeTextNode(oldNode)) {

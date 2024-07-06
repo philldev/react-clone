@@ -9,3 +9,16 @@ export function arraysAreEqual<T>(arr1: T[], arr2: T[]): boolean {
   }
   return true;
 }
+
+export function compareProps(oldProps: any, newProps: any) {
+  for (const [key, value] of Object.entries(newProps)) {
+    if (key === "children") {
+      continue;
+    }
+    if (value !== oldProps[key]) {
+      return true;
+    }
+  }
+
+  return false;
+}
