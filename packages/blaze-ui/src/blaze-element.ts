@@ -37,7 +37,15 @@ export function createElement<
       children?: BlazeNode;
     });
 
-  elementProps.children = children ?? [];
+  if (children.length === 1 && isBlazeNode(children[0])) {
+    elementProps.children = children[0];
+  } else if (children.length > 0) {
+    elementProps.children = children.filter(
+      (c) => c !== null && c !== undefined,
+    );
+  } else {
+    elementProps.children = undefined;
+  }
 
   Object.freeze(elementProps);
 
