@@ -1,4 +1,8 @@
-export type BlazeElementType = string;
+export interface BlazeComponent<T extends any> {
+  (props: T): BlazeNode;
+}
+
+export type BlazeElementType = string | BlazeComponent<any>;
 export type BlazeElementProps = any;
 
 export interface BlazeElement<
@@ -7,6 +11,7 @@ export interface BlazeElement<
 > {
   type: T;
   props: U;
+  __componentChildrenSnapshot?: BlazeNode;
 }
 
 export type BlazeFragment = BlazeNode[];
@@ -85,7 +90,19 @@ export const tags = new Proxy(
 ) as Tags;
 
 export function isBlazeElement(node: any): node is BlazeElement<any, any> {
-  return typeof node === "object" && "type" in node;
+  return (
+    typeof node === "object" && "type" in node && typeof node.type === "string"
+  );
+}
+
+export function isBlazeComponent(
+  node: any,
+): node is BlazeElement<BlazeComponent<any>, any> {
+  return (
+    typeof node === "object" &&
+    "type" in node &&
+    typeof node.type === "function"
+  );
 }
 
 export function isBlazeFragment(node: any): node is BlazeFragment {

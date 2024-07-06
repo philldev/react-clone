@@ -1,9 +1,11 @@
 import {
+  isBlazeComponent,
   isBlazeElement,
   isBlazeFragment,
   isBlazeNode,
   isBlazeNullNode,
   isBlazeTextNode,
+  type BlazeComponent,
   type BlazeElement,
   type BlazeFragment,
   type BlazeNode,
@@ -31,11 +33,13 @@ export function render(node: BlazeNode, container: HTMLElement) {
   }
 }
 
-function createBlazeNodeDom(node: BlazeNode) {
+function createBlazeNodeDom(node: BlazeNode): Node | null {
   if (isBlazeTextNode(node)) {
     return createBlazeTextNodeDom(node);
   } else if (isBlazeElement(node)) {
     return createBlazeElementDom(node);
+  } else if (isBlazeComponent(node)) {
+    return createBlazeComponentDom(node);
   } else if (isBlazeFragment(node)) {
     return createBlazeFragmentDom(node);
   } else if (isBlazeNullNode(node)) {
@@ -59,6 +63,15 @@ function createBlazeFragmentDom(fragment: BlazeFragment) {
     domFragment.append(dom);
   }
   return domFragment;
+}
+
+function createBlazeComponentDom(node: BlazeElement<BlazeComponent<any>, any>) {
+  const Component = node.type;
+  const props = node.props;
+  const snapshots = Component(props);
+  node.__componentChildrenSnapshot = snapshots;
+
+  return createBlazeNodeDom(snapshots);
 }
 
 function createBlazeElementDom(element: BlazeElement<any, any>) {
@@ -145,8 +158,6 @@ function update(
   depth: number = 0,
   lastFragmentLength: number = 0,
 ) {
-  debugger;
-
   const nodeDomIndex = index + lastFragmentLength;
 
   if (isDifferentNode(oldNode, newNode)) {
@@ -161,6 +172,23 @@ function update(
       replaceBlazeNodeDom(nodeDomIndex, newNode, parent);
     }
     return;
+  }
+
+  if (isBlazeComponent(newNode) && isBlazeComponent(oldNode)) {
+    const newProps = newNode.props;
+    const NewComponent = newNode.type;
+
+    const newSnapshots = NewComponent(newProps);
+    const oldSnapshots = oldNode.__componentChildrenSnapshot;
+
+    update(
+      oldSnapshots,
+      newSnapshots,
+      parent,
+      index,
+      depth,
+      lastFragmentLength,
+    );
   }
 
   if (isBlazeTextNode(newNode) && isBlazeTextNode(oldNode)) {
@@ -254,10 +282,18 @@ function updateChildren(
   if (!arraysAreEqual(oldChildren, newChildren)) {
     const maxLength = Math.max(oldChildren.length, newChildren.length);
 
+    let fragmentLength = 0;
+
     for (let i = 0; i < maxLength; i++) {
       const oldChild = oldChildren[i];
       const newChild = newChildren[i];
-      update(oldChild, newChild, currentEl, i);
+
+      if (isBlazeFragment(newChild)) {
+        // @ts-ignore - this is a hack to get the length of the fragment
+        fragmentLength += newChild.flat(Infinity).length;
+      }
+
+      update(oldChild, newChild, currentEl, i, 0, fragmentLength);
     }
   }
 }
