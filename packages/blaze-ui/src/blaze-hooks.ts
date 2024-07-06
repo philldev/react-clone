@@ -46,3 +46,19 @@ export function useReducer<S, A>(
 
   return [componentHooks[localHookIndex].value, dispatch];
 }
+
+type SetStateAction<S> = S | ((prevState: S) => S);
+
+export function useState<S>(initialState: S): [S, Dispatch<SetStateAction<S>>] {
+  const [state, dispatch] = useReducer(
+    (state: S, action: SetStateAction<S>) => {
+      if (typeof action === "function") {
+        return (action as (prevState: S) => S)(state);
+      }
+      return action;
+    },
+    initialState,
+  );
+
+  return [state, dispatch] as const;
+}

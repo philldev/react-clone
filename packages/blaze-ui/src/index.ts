@@ -1,3 +1,3 @@
 export { tags, createElement } from "./blaze-element";
 export { render } from "./blaze-render";
-export { useReducer } from "./blaze-hooks";
+export { useReducer, useState } from "./blaze-hooks";

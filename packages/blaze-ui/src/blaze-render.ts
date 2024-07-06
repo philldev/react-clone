@@ -13,24 +13,19 @@ import {
 } from "./blaze-element";
 import { arraysAreEqual, compareProps } from "./utils";
 
-let _currentContainer: HTMLElement | null = null;
-let _currentNode: BlazeNode | null = null;
-let _mounted = false;
+// let _currentContainer: HTMLElement | null = null;
+// let _currentNode: BlazeNode | null = null;
+// let _mounted = false;
 
 export function render(node: BlazeNode, container: HTMLElement) {
-  if (!_mounted) {
-    _currentContainer = container;
-    _currentNode = node;
-    const dom = createBlazeNodeDom(node, container);
-    if (dom === null) {
-      return;
-    }
-    container.append(dom);
-    _mounted = true;
-  } else {
-    update(_currentNode, node, container);
-    _currentNode = node;
+  // _currentContainer = container;
+  // _currentNode = node;
+  const dom = createBlazeNodeDom(node, container);
+  if (dom === null) {
+    return;
   }
+  container.append(dom);
+  // _mounted = true;
 }
 
 function createBlazeNodeDom(
@@ -148,9 +143,6 @@ function createBlazeElementDom(element: BlazeElement<any, any>) {
       if (Array.isArray(value)) {
         for (let i = 0; i < value.length; i++) {
           const child = value[i];
-          if (!isBlazeNode(child)) {
-            throw new Error(`Invalid child node: ${child}`);
-          }
           const dom = createBlazeNodeDom(child, domElement, i);
           if (dom === null) {
             continue;

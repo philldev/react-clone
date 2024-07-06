@@ -1,14 +1,49 @@
-import { tags, render, createElement } from "blaze-ui";
+import { tags, render, createElement, useState } from "blaze-ui";
 
-const { div, h1, button, ul, li } = tags;
+const { div, h1, button, p, ul, li } = tags;
 
 const container = document.getElementById("app")!;
 
-let App = () =>
-  div(
+let App = () => {
+  const [count, setCount] = useState(0);
+
+  const handleClick = () => {
+    console.log("clicked");
+    setCount(count + 1);
+  };
+
+  return div(
     h1("Hello"),
-    button("Click me"),
-    ul(li("Item 1"), li("Item 2"), li("Item 3")),
+    button(
+      {
+        onclick: handleClick,
+      },
+      "Click me",
+    ),
+    p("App Count: ", count),
+    createElement(Counter),
   );
+};
+
+let Counter = () => {
+  const [count, setCount] = useState(0);
+
+  const handleClick = () => {
+    console.log("clicked");
+    setCount(count + 1);
+  };
+
+  return div(
+    h1("Hello"),
+    button(
+      {
+        onclick: handleClick,
+      },
+      "Click me",
+    ),
+    p("Child Count: ", count),
+    ul(new Array(count).fill(null).map((_, i) => li(i))),
+  );
+};
 
 render(createElement(App), container);
