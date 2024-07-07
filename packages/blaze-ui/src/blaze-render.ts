@@ -122,11 +122,14 @@ export function tryRerenderComponent(
   const hooks = node.__hooks!;
   const container = node.__componentContainer!;
 
+  console.log("TRYING TO RERENDER COMPONENT", node);
+
   for (let i = 0; i < hooks.length; i++) {
     const hook = hooks[i];
     if (hook.value !== hook.prevValue) {
       const oldSnapshots = node.__componentChildrenSnapshot;
       const snapshots = renderComponent(node, container);
+
       update(oldSnapshots, snapshots, container, node.__domIndex!);
       return;
     }
@@ -207,21 +210,28 @@ function update(
   newNode: BlazeNode,
   parent: HTMLElement,
   index: number = 0,
-  depth: number = 0,
-  lastFragmentLength: number = 0,
 ) {
-  const nodeDomIndex = index + lastFragmentLength;
+  console.log("UPDATING NODE", oldNode, newNode);
 
   if (isDifferentNode(oldNode, newNode)) {
     if (isBlazeNullNode(oldNode)) {
-      appendBlazeNodeDom(newNode, parent);
+      let sibling = parent.childNodes[index];
+
+      if (sibling !== null && sibling !== undefined) {
+        const dom = createBlazeNodeDom(newNode, parent, index);
+        if (dom !== null) {
+          parent.replaceChild(dom, sibling);
+        }
+      } else {
+        appendBlazeNodeDom(newNode, parent);
+      }
     } else if (isBlazeNullNode(newNode)) {
-      removeBlazeNodeDom(nodeDomIndex, parent);
+      removeBlazeNodeDom(index, parent);
     } else if (isBlazeFragment(oldNode)) {
-      removeFragmentChildren(oldNode, parent, nodeDomIndex);
+      removeFragmentChildren(oldNode, parent, index);
       appendBlazeNodeDom(newNode, parent);
     } else {
-      replaceBlazeNodeDom(nodeDomIndex, newNode, parent);
+      replaceBlazeNodeDom(index, newNode, parent);
     }
     return;
   }
@@ -233,42 +243,25 @@ function update(
     let propsChanged = compareProps(oldProps, newProps);
 
     if (propsChanged) {
+      console.log("RERENDERING COMPONENT");
+
+      newNode.__domIndex = index;
       const newSnapshots = renderComponent(newNode, parent);
       const oldSnapshots = oldNode.__componentChildrenSnapshot;
 
-      update(
-        oldSnapshots,
-        newSnapshots,
-        parent,
-        index,
-        depth,
-        lastFragmentLength,
-      );
+      update(oldSnapshots, newSnapshots, parent, index);
     }
   }
 
   if (isBlazeTextNode(newNode) && isBlazeTextNode(oldNode)) {
     if (newNode.toString() !== oldNode.toString()) {
-      parent.childNodes[nodeDomIndex].textContent = newNode.toString();
+      parent.childNodes[index].textContent = newNode.toString();
     }
     return;
   }
 
   if (isBlazeFragment(newNode) && isBlazeFragment(oldNode)) {
-    const maxLength = Math.max(oldNode.length, newNode.length);
-    let fragmentLength = 0;
-
-    for (let i = 0; i < maxLength; i++) {
-      const oldChild = oldNode[i];
-      const newChild = newNode[i];
-
-      if (isBlazeFragment(newChild)) {
-        // @ts-ignore - this is a hack to get the length of the fragment
-        fragmentLength += newChild.flat(Infinity).length;
-      }
-
-      update(oldChild, newChild, parent, index + depth + i, depth + 1);
-    }
+    updateMultiChildren(oldNode, newNode, parent);
     return;
   }
 
@@ -335,21 +328,58 @@ function updateChildren(
     ? newNode.props.children
     : [newNode.props.children];
 
-  if (!arraysAreEqual(oldChildren, newChildren)) {
-    const maxLength = Math.max(oldChildren.length, newChildren.length);
+  updateMultiChildren(oldChildren, newChildren, currentEl);
+}
 
-    let fragmentLength = 0;
+function updateMultiChildren(
+  oldChildren: BlazeNode[],
+  newChildren: BlazeNode[],
+  currentEl: HTMLElement,
+) {
+  let flattenedOldChildren: BlazeNode[] = [];
+  let flattenedNewChildren: BlazeNode[] = [];
 
-    for (let i = 0; i < maxLength; i++) {
-      const oldChild = oldChildren[i];
-      const newChild = newChildren[i];
+  if (Array.isArray(oldChildren[0])) {
+    // @ts-ignore
+    flattenedOldChildren = oldChildren.flat(Infinity);
+  } else {
+    flattenedOldChildren = oldChildren;
+  }
 
-      if (isBlazeFragment(newChild)) {
-        // @ts-ignore - this is a hack to get the length of the fragment
-        fragmentLength += newChild.flat(Infinity).length;
-      }
+  if (Array.isArray(newChildren[0])) {
+    flattenedNewChildren = newChildren.flat(Infinity);
+  } else {
+    flattenedNewChildren = newChildren;
+  }
 
-      update(oldChild, newChild, currentEl, i, 0, fragmentLength);
+  const maxLength = Math.max(
+    flattenedOldChildren.length,
+    flattenedNewChildren.length,
+  );
+
+  let nodeIndex = 0;
+
+  for (let i = 0; i < maxLength; i++) {
+    const oldChild = oldChildren[i];
+    const newChild = newChildren[i];
+
+    let prevNewChild = newChildren[i - 1];
+
+    let isPrevChildRemoved = isBlazeNullNode(prevNewChild);
+    let isPrevChildAppended = isBlazeNullNode(oldChild);
+
+    if (isPrevChildRemoved && i > 0) {
+      nodeIndex--;
+    }
+
+    if (isPrevChildAppended && i > 0) {
+      nodeIndex++;
+    }
+
+    update(oldChild, newChild, currentEl, nodeIndex);
+
+    if (!isBlazeNullNode(oldChild)) {
+      nodeIndex++;
     }
   }
 }

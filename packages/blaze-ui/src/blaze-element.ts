@@ -49,10 +49,8 @@ export function createElement<
 
   if (children.length === 1 && isBlazeNode(children[0])) {
     elementProps.children = children[0];
-  } else if (children.length > 0) {
-    elementProps.children = children.filter(
-      (c) => c !== null && c !== undefined,
-    );
+  } else if (children.length > 1) {
+    elementProps.children = children;
   } else {
     elementProps.children = undefined;
   }
@@ -96,7 +94,11 @@ export const tags = new Proxy(
 
 export function isBlazeElement(node: any): node is BlazeElement<any, any> {
   return (
-    typeof node === "object" && "type" in node && typeof node.type === "string"
+    node !== null &&
+    node !== undefined &&
+    typeof node === "object" &&
+    "type" in node &&
+    typeof node.type === "string"
   );
 }
 
@@ -104,6 +106,8 @@ export function isBlazeComponent(
   node: any,
 ): node is BlazeElement<BlazeComponent<any>, any> {
   return (
+    node !== null &&
+    node !== undefined &&
     typeof node === "object" &&
     "type" in node &&
     typeof node.type === "function"

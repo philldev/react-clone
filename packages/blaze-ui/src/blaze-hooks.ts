@@ -20,6 +20,7 @@ export function useReducer<S, A>(
 ): [S, Dispatch<A>] {
   const componentNode = getCurrentComponentNode();
 
+  console.log("USE REDUCER", componentNode);
   if (componentNode === null) {
     throw new Error("useReducer must be used within a component");
   }

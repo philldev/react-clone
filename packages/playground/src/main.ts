@@ -5,28 +5,26 @@ const { div, h1, button, p, ul, li } = tags;
 const container = document.getElementById("app")!;
 
 let App = () => {
-  const [count, setCount] = useState(0);
+  const [show, setShow] = useState(false);
 
   const handleClick = () => {
-    console.log("clicked");
-    setCount(count + 1);
+    setShow(!show);
   };
 
   return div(
-    h1("Hello"),
+    h1(`show: ${show}`),
     button(
       {
         onclick: handleClick,
       },
-      "Click me",
+      "Toggle",
     ),
-    p("App Count: ", count),
-    createElement(Counter),
+    createElement(Counter, { count: show ? 1 : 0 }),
   );
 };
 
-let Counter = () => {
-  const [count, setCount] = useState(0);
+let Counter = (props: { count: number }) => {
+  const [count, setCount] = useState(props.count);
 
   const handleClick = () => {
     console.log("clicked");
@@ -34,7 +32,6 @@ let Counter = () => {
   };
 
   return div(
-    h1("Hello"),
     button(
       {
         onclick: handleClick,
