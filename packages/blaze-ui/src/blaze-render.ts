@@ -2,7 +2,6 @@ import {
   isBlazeComponent,
   isBlazeElement,
   isBlazeFragment,
-  isBlazeNode,
   isBlazeNullNode,
   isBlazeTextNode,
   type BlazeComponent,
@@ -11,21 +10,14 @@ import {
   type BlazeNode,
   type BlazeTextNode,
 } from "./blaze-element";
-import { arraysAreEqual, compareProps } from "./utils";
-
-// let _currentContainer: HTMLElement | null = null;
-// let _currentNode: BlazeNode | null = null;
-// let _mounted = false;
+import { compareProps } from "./utils";
 
 export function render(node: BlazeNode, container: HTMLElement) {
-  // _currentContainer = container;
-  // _currentNode = node;
   const dom = createBlazeNodeDom(node, container);
   if (dom === null) {
     return;
   }
   container.append(dom);
-  // _mounted = true;
 }
 
 function createBlazeNodeDom(
@@ -122,18 +114,19 @@ export function tryRerenderComponent(
   const hooks = node.__hooks!;
   const container = node.__componentContainer!;
 
-  console.log("TRYING TO RERENDER COMPONENT", node);
+  let hooksChanged = false;
 
   for (let i = 0; i < hooks.length; i++) {
     const hook = hooks[i];
     if (hook.value !== hook.prevValue) {
-      const oldSnapshots = node.__componentChildrenSnapshot;
-      const snapshots = renderComponent(node, container);
-
-      update(oldSnapshots, snapshots, container, node.__domIndex!);
-      return;
+      hooksChanged = true;
+      break;
     }
   }
+
+  const oldSnapshots = node.__componentChildrenSnapshot;
+  const snapshots = renderComponent(node, container);
+  update(oldSnapshots, snapshots, container, node.__domIndex!);
 }
 
 function createBlazeElementDom(element: BlazeElement<any, any>) {
@@ -211,16 +204,15 @@ function update(
   parent: HTMLElement,
   index: number = 0,
 ) {
-  console.log("UPDATING NODE", oldNode, newNode);
-
   if (isDifferentNode(oldNode, newNode)) {
     if (isBlazeNullNode(oldNode)) {
       let sibling = parent.childNodes[index];
 
       if (sibling !== null && sibling !== undefined) {
         const dom = createBlazeNodeDom(newNode, parent, index);
+        console.log({ dom, sibling, index });
         if (dom !== null) {
-          parent.replaceChild(dom, sibling);
+          parent.insertBefore(dom, sibling);
         }
       } else {
         appendBlazeNodeDom(newNode, parent);
@@ -243,8 +235,6 @@ function update(
     let propsChanged = compareProps(oldProps, newProps);
 
     if (propsChanged) {
-      console.log("RERENDERING COMPONENT");
-
       newNode.__domIndex = index;
       const newSnapshots = renderComponent(newNode, parent);
       const oldSnapshots = oldNode.__componentChildrenSnapshot;
@@ -357,29 +347,47 @@ function updateMultiChildren(
     flattenedNewChildren.length,
   );
 
-  let nodeIndex = 0;
+  let domIndex = 0;
 
   for (let i = 0; i < maxLength; i++) {
     const oldChild = oldChildren[i];
     const newChild = newChildren[i];
 
-    let prevNewChild = newChildren[i - 1];
+    if (i > 0) {
+      let prevNewChild = newChildren[i - 1];
+      let prevOldChild = oldChildren[i - 1];
 
-    let isPrevChildRemoved = isBlazeNullNode(prevNewChild);
-    let isPrevChildAppended = isBlazeNullNode(oldChild);
+      let isPrevChildRemoved =
+        (isBlazeTextNode(prevOldChild) ||
+          isBlazeElement(prevOldChild) ||
+          isBlazeComponent(prevOldChild)) &&
+        isBlazeNullNode(prevNewChild);
+      let isPrevChildAppended =
+        (isBlazeTextNode(prevNewChild) ||
+          isBlazeElement(prevNewChild) ||
+          isBlazeComponent(prevNewChild)) &&
+        isBlazeNullNode(prevOldChild);
 
-    if (isPrevChildRemoved && i > 0) {
-      nodeIndex--;
+      console.log({
+        isPrevChildRemoved,
+        isPrevChildAppended,
+        prevOldChild,
+        prevNewChild,
+      });
+
+      if (isPrevChildRemoved) {
+        domIndex--;
+      }
+
+      if (isPrevChildAppended) {
+        domIndex++;
+      }
     }
 
-    if (isPrevChildAppended && i > 0) {
-      nodeIndex++;
-    }
-
-    update(oldChild, newChild, currentEl, nodeIndex);
+    update(oldChild, newChild, currentEl, domIndex);
 
     if (!isBlazeNullNode(oldChild)) {
-      nodeIndex++;
+      domIndex++;
     }
   }
 }

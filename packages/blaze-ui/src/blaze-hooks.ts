@@ -14,13 +14,39 @@ export type Hook = {
 type Reducer<S, A> = (state: S, action: A) => S;
 type Dispatch<A> = (action: A) => void;
 
+const updateQueue: (() => void)[] = [];
+let isBatchingUpdates = false;
+
+const processUpdateQueue = (
+  currentComponentNode: BlazeElement<BlazeComponent<any>, any>,
+) => {
+  while (updateQueue.length > 0) {
+    const update = updateQueue.shift();
+    if (update) update();
+  }
+
+  tryRerenderComponent(currentComponentNode);
+
+  isBatchingUpdates = false;
+};
+
+const scheduleUpdate = (
+  update: () => void,
+  currentComponentNode: BlazeElement<BlazeComponent<any>, any>,
+) => {
+  updateQueue.push(update);
+  if (!isBatchingUpdates) {
+    isBatchingUpdates = true;
+    queueMicrotask(() => processUpdateQueue(currentComponentNode));
+  }
+};
+
 export function useReducer<S, A>(
   reducer: Reducer<S, A>,
   initialState: S,
 ): [S, Dispatch<A>] {
   const componentNode = getCurrentComponentNode();
 
-  console.log("USE REDUCER", componentNode);
   if (componentNode === null) {
     throw new Error("useReducer must be used within a component");
   }
@@ -38,17 +64,18 @@ export function useReducer<S, A>(
   }
 
   const dispatch = (action: A) => {
-    const nextState = reducer(componentHooks[localHookIndex].value, action);
-    componentHooks[localHookIndex].prevValue =
-      componentHooks[localHookIndex].value;
-    componentHooks[localHookIndex].value = nextState;
-    tryRerenderComponent(componentNode);
+    scheduleUpdate(() => {
+      const nextState = reducer(componentHooks[localHookIndex].value, action);
+      componentHooks[localHookIndex].prevValue =
+        componentHooks[localHookIndex].value;
+      componentHooks[localHookIndex].value = nextState;
+    }, componentNode);
   };
 
   return [componentHooks[localHookIndex].value, dispatch];
 }
 
-type SetStateAction<S> = S | ((prevState: S) => S);
+type SetStateAction<S> = S | ((prevState: S) => S | S);
 
 export function useState<S>(initialState: S): [S, Dispatch<SetStateAction<S>>] {
   const [state, dispatch] = useReducer(

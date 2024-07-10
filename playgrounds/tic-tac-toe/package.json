@@ -1,5 +1,5 @@
 {
-  "name": "playground",
+  "name": "tic-tac-toe",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -8,10 +8,11 @@
     "build": "tsc && vite build",
     "preview": "vite preview"
   },
-  "dependencies": {
-    "blaze-ui": "workspace:*"
-  },
   "devDependencies": {
+    "blaze-ui": "workspace:*",
+    "autoprefixer": "^10.4.19",
+    "postcss": "^8.4.39",
+    "tailwindcss": "^3.4.4",
     "typescript": "^5.0.2",
     "vite": "^4.3.9"
   }
