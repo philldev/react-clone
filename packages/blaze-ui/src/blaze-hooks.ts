@@ -5,8 +5,10 @@ import {
   incrementCurrentHookIndex,
   tryRerenderComponent,
 } from "./blaze-render";
+import { arraysAreEqual } from "./utils";
 
 export type Hook = {
+  type: "state" | "effect";
   value: any;
   prevValue: any;
 };
@@ -58,6 +60,7 @@ export function useReducer<S, A>(
 
   if (componentHooks[localHookIndex] === undefined) {
     componentHooks[localHookIndex] = {
+      type: "state",
       value: initialState,
       prevValue: initialState,
     };
@@ -89,4 +92,48 @@ export function useState<S>(initialState: S): [S, Dispatch<SetStateAction<S>>] {
   );
 
   return [state, dispatch] as const;
+}
+
+export function useEffect(effect: () => void | (() => void), deps?: any[]) {
+  const componentNode = getCurrentComponentNode();
+
+  if (componentNode === null) {
+    throw new Error("useEffect must be used within a component");
+  }
+
+  const componentHooks = componentNode.__hooks!;
+
+  const index = getCurrentHookIndex();
+  incrementCurrentHookIndex();
+
+  let hasChanged = true;
+
+  let oldDeps = componentHooks[index]?.value?.deps;
+
+  if (componentHooks[index] === undefined) {
+    componentHooks[index] = {
+      type: "effect",
+      value: { deps },
+      prevValue: null,
+    };
+  }
+
+  if (oldDeps) {
+    hasChanged = false;
+    deps?.forEach((dep: any[], i: number) => {
+      if (!Object.is(dep, oldDeps[i])) {
+        hasChanged = true;
+      }
+    });
+  }
+
+  if (hasChanged) {
+    const cleanup = effect();
+
+    if (typeof cleanup === "function") {
+      componentHooks[index].value.cleanup = cleanup;
+    }
+  }
+
+  componentHooks[index].value.deps = deps;
 }

@@ -1,6 +1,7 @@
 import "./style.css";
 import { render, tags, createElement, useState } from "blaze-ui";
 import { checkWinner, noop } from "./utils";
+import { useEffect } from "blaze-ui/src/blaze-hooks";
 
 const { div, h1, p, button } = tags;
 
@@ -55,19 +56,16 @@ function App() {
       "Tic Tac Toe",
     ), // 0
 
-    // FIXME: this is not working
     !winner ? p(`Player: ${player}`) : null, // 2
     winner ? p(`The Winner is: ${winner}`) : null, // 1
-    // probaly because of the diffing algorithm
-    // div(
-    //   !winner ? p(`Player: ${player}`) : null,
-    //   winner ? p(`The Winner is: ${winner}`) : null,
-    // ),
-    createElement(Board, {
-      board,
-      onSquareClick,
-      disabled: gameOver,
-    }), //
+
+    !winner
+      ? createElement(Board, {
+          board,
+          onSquareClick,
+          disabled: gameOver,
+        })
+      : null, //
 
     button(
       {
@@ -75,7 +73,7 @@ function App() {
           "bg-gray-900 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded",
         onclick: reset,
       },
-      "Reset",
+      "Restart",
     ),
   );
 }

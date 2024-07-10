@@ -13,7 +13,6 @@ function checkWinner<T extends string>(board: T[]) {
   for (const line of lines) {
     const [a, b, c] = line;
     if (board[a] && board[a] === board[b] && board[a] === board[c]) {
-      console.log(board[a]);
       return board[a];
     }
   }

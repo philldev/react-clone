@@ -116,13 +116,14 @@ export function tryRerenderComponent(
 
   let hooksChanged = false;
 
-  for (let i = 0; i < hooks.length; i++) {
-    const hook = hooks[i];
-    if (hook.value !== hook.prevValue) {
+  let stateHooks = hooks.filter((hook) => hook.type === "state");
+
+  stateHooks.forEach((hook) => {
+    if (!Object.is(hook.value, hook.prevValue)) {
       hooksChanged = true;
-      break;
+      return;
     }
-  }
+  });
 
   const oldSnapshots = node.__componentChildrenSnapshot;
   const snapshots = renderComponent(node, container);
@@ -210,7 +211,6 @@ function update(
 
       if (sibling !== null && sibling !== undefined) {
         const dom = createBlazeNodeDom(newNode, parent, index);
-        console.log({ dom, sibling, index });
         if (dom !== null) {
           parent.insertBefore(dom, sibling);
         }
@@ -218,6 +218,7 @@ function update(
         appendBlazeNodeDom(newNode, parent);
       }
     } else if (isBlazeNullNode(newNode)) {
+      unmountNode(oldNode);
       removeBlazeNodeDom(index, parent);
     } else if (isBlazeFragment(oldNode)) {
       removeFragmentChildren(oldNode, parent, index);
@@ -236,6 +237,7 @@ function update(
 
     if (propsChanged) {
       newNode.__domIndex = index;
+      newNode.__hooks = oldNode.__hooks;
       const newSnapshots = renderComponent(newNode, parent);
       const oldSnapshots = oldNode.__componentChildrenSnapshot;
 
@@ -368,13 +370,6 @@ function updateMultiChildren(
           isBlazeComponent(prevNewChild)) &&
         isBlazeNullNode(prevOldChild);
 
-      console.log({
-        isPrevChildRemoved,
-        isPrevChildAppended,
-        prevOldChild,
-        prevNewChild,
-      });
-
       if (isPrevChildRemoved) {
         domIndex--;
       }
@@ -417,11 +412,44 @@ function updateEventListener(
   currentEl.addEventListener(eventName, newHandler);
 }
 
+function unmountNode(node: BlazeNode) {
+  if (isBlazeComponent(node)) {
+    const snapshots = node.__componentChildrenSnapshot as BlazeNode[];
+
+    if (Array.isArray(snapshots)) {
+      snapshots.forEach((child) => unmountNode(child));
+    } else {
+      unmountNode(snapshots);
+    }
+
+    const effects = node.__hooks!.filter((hook) => hook.type === "effect");
+    effects.forEach((hook) => {
+      const cleanup = hook.value.cleanup;
+      if (typeof cleanup === "function") {
+        cleanup();
+      }
+    });
+  }
+  if (isBlazeElement(node)) {
+    const children = node.props.children as BlazeNode[];
+    if (Array.isArray(children)) {
+      children.forEach((child) => unmountNode(child));
+    } else {
+      unmountNode(children);
+    }
+  }
+}
+
 function isDifferentNode(oldNode: BlazeNode, newNode: BlazeNode) {
-  return (
-    (isBlazeTextNode(newNode) && !isBlazeTextNode(oldNode)) ||
-    (isBlazeFragment(newNode) && !isBlazeFragment(oldNode)) ||
-    (isBlazeElement(newNode) && !isBlazeElement(oldNode)) ||
-    (isBlazeNullNode(newNode) && !isBlazeNullNode(oldNode))
+  const nodeTypeCheckers = [
+    isBlazeTextNode,
+    isBlazeFragment,
+    isBlazeElement,
+    isBlazeNullNode,
+    isBlazeComponent,
+  ];
+
+  return nodeTypeCheckers.some(
+    (checker) => checker(newNode) !== checker(oldNode),
   );
 }
